@@ -1,55 +1,139 @@
-#ifndef THREADS_SYNCH_H
-#define THREADS_SYNCH_H
+#ifndef THREADS_THREAD_H
+#define THREADS_THREAD_H
 
+#include <debug.h>
 #include <list.h>
-#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include "threads/synch.h"
 
-/* A counting semaphore. */
-struct semaphore
-{
-    unsigned value;      /* Current value. */
-    struct list waiters; /* List of waiting threads. */
-};
+/* States in a thread's life cycle. */
+enum thread_status
+  {
+    THREAD_RUNNING,     /* Running thread. */
+    THREAD_READY,       /* Not running but ready to run. */
+    THREAD_BLOCKED,     /* Waiting for an event to trigger. */
+    THREAD_DYING        /* About to be destroyed. */
+  };
 
-void sema_init (struct semaphore *, unsigned value);
-void sema_down (struct semaphore *);
-bool sema_try_down (struct semaphore *);
-void sema_up (struct semaphore *);
-void sema_self_test (void);
+/* Thread identifier type.
+   You can redefine this to the type you prefer. */
+typedef int tid_t;
+#define TID_ERROR ((tid_t) -1)          /* Error value for tid_t. */
 
-/* Lock. */
-struct lock
-{
-    struct thread *holder;         /* Thread holding lock (for debugging). */
-    struct semaphore semaphore;    /* Binary semaphore controlling access. */
-    
-    /* [추가] Project 1: Priority Donation 관련 */
-    struct list donators;          /* 이 Lock을 기다리는 스레드 리스트 (우선순위 순). */
-    int max_priority;              /* donators 리스트에서 가장 높은 우선순위입니다. */
-};
+/* Thread priorities. */
+#define PRI_MIN 0                       /* Lowest priority. */
+#define PRI_DEFAULT 31                  /* Default priority. */
+#define PRI_MAX 63                      /* Highest priority. */
 
-void lock_init (struct lock *);
-void lock_acquire (struct lock *);
-bool lock_try_acquire (struct lock *);
-void lock_release (struct lock *);
-bool lock_held_by_current_thread (const struct lock *);
+/* A kernel thread or process.
 
-/* Condition variable. */
-struct condition
-{
-    struct list waiters; /* List of waiting threads. */
-};
+   Each thread structure is stored in its own 4 kB page.  The
+   thread control block (TCB) is always at the beginning of the
+   page.
 
-void cond_init (struct condition *);
-void cond_wait (struct condition *, struct lock *);
-void cond_signal (struct condition *, struct lock *);
-void cond_broadcast (struct condition *, struct lock *);
+   The first member is the thread's saved stack pointer, which
+   is used to switch between threads.
 
-/* Optimization barrier.
+   It's essential to understand the representation of a thread's
+   stack:
 
-   The compiler will not reorder operations across an
-   optimization barrier.  See "Optimization Barriers" in the
-   reference guide for more information.*/
-#define barrier() asm volatile ("" : : : "memory")
+         +-----------------+
+         | Switch frames   |
+         |-----------------|
+         | Thread structure|
+         |-----------------|
+         | page start      |
+         +-----------------+
 
-#endif /* threads/synch.h */
+   The original thread's stack looks like this:
+
+         +-----------------+
+         | Switch frames   |
+         |-----------------|
+         | (kernel/thread) |
+         |-----------------|
+         | (kernel/thread) |
+         +-----------------+
+ 
+   The `stack' member points to the bottommost of the stack
+   frames, ready to be popped off.
+*/
+struct thread
+  {
+    /* Owned by thread.c. */
+    tid_t tid;                      /* Thread identifier. */
+    enum thread_status status;      /* Thread state. */
+    char name[16];                  /* Name (for debugging purposes). */
+    uint8_t *stack;                 /* Saved stack pointer. */
+    int priority;                   /* Priority. */
+    struct list_elem allelem;       /* List element for all threads list. */
+
+    /* Shared between thread.c and synch.c. */
+    struct list_elem elem;          /* List element. */
+
+    /* [추가] Project 1: Priority Scheduling & Donation 관련 */
+    int original_priority;          /* Donation을 위해 원래 우선순위를 저장합니다. */
+    struct lock *wait_on_lock;      /* 현재 스레드가 획득을 기다리는 Lock의 포인터입니다. */
+    struct list_elem donation_elem; /* 락의 donators 리스트에 삽입될 리스트 요소입니다. */
+
+    /* [추가] Project 1: Aging 및 MLFQS 관련 */
+    int age;                        /* 에이징을 위한 틱 카운터입니다. */
+    int mlfqs_queue_level;          /* Simplified MLFQS 큐 레벨입니다 (0: Q0, 1: Q1, 2: Q2). */
+
+#ifdef USERPROG
+    /* Owned by userprog/process.c. */
+    uint32_t *pagedir;              /* Page directory. */
+#endif
+
+    /* Owned by thread.c. */
+    unsigned magic;                 /* Detects stack overflow. */
+  };
+
+/* If false (default), use round-robin scheduler.
+   If true, use multi-level feedback queue scheduler.
+   Controlled by kernel command-line option "-o mlfqs". */
+extern bool thread_mlfqs;
+
+void thread_init (void);
+void thread_start (void);
+
+void thread_tick (void);
+void thread_print_stats (void);
+
+typedef void thread_func (void *aux);
+tid_t thread_create (const char *name, int priority, thread_func *, void *aux);
+
+void thread_block (void);
+void thread_unblock (struct thread *);
+
+struct thread *thread_current (void);
+tid_t thread_tid (void);
+const char *thread_name (void);
+
+void thread_exit (void) NO_RETURN;
+void thread_yield (void);
+
+/* [추가] Project 1: 스케줄링 및 동기화 헬퍼 함수 선언 */
+
+/* 우선순위 비교 함수 (ready_list 및 synch 대기열 정렬에 사용) */
+bool thread_cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux);
+
+/* Priority Donation 헬퍼 함수 */
+void donate_priority (void);
+void remove_with_lock (struct lock *lock);
+void refresh_priority (void);
+
+/* Performs some operation on thread t, given auxiliary data AUX. */
+typedef void thread_action_func (struct thread *t, void *aux);
+void thread_foreach (thread_action_func *, void *);
+
+int thread_get_priority (void);
+void thread_set_priority (int new_priority);
+
+int thread_get_nice (void);
+void thread_set_nice (int nice);
+int thread_get_load_avg (void);
+int thread_get_recent_cpu (void);
+
+#endif /* threads/thread.h */
