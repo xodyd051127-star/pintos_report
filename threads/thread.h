@@ -83,15 +83,24 @@ typedef int tid_t;
 struct thread
 {
     /* Owned by thread.c. */
-    tid_t tid;                 /* Thread identifier. */
-    enum thread_status status; /* Thread state. */
-    char name[16];             /* Name (for debugging purposes). */
-    uint8_t *stack;            /* Saved stack pointer. */
-    int priority;              /* Priority. */
-    struct list_elem allelem;  /* List element for all threads list. */
+    tid_t tid;                     /* Thread identifier. */
+    enum thread_status status;     /* Thread state. */
+    char name[16];                 /* Name (for debugging purposes). */
+    uint8_t *stack;                /* Saved stack pointer. */
+    int priority;                  /* Priority. */
+    struct list_elem allelem;      /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
-    struct list_elem elem; /* List element. */
+    struct list_elem elem;         /* List element. */
+
+    /* [추가] Project 1: Priority Scheduling & Donation 관련 */
+    int original_priority;         /* Donation을 위해 원래 우선순위를 저장합니다. */
+    struct lock *wait_on_lock;     /* 현재 스레드가 획득을 기다리는 Lock입니다. */
+    struct list_elem donation_elem;/* 락의 donators 리스트에 삽입될 리스트 요소입니다. */
+
+    /* [추가] Project 1: Aging 및 MLFQS 관련 */
+    int age;                       /* 에이징을 위한 틱 카운터입니다. */
+    int mlfqs_queue_level;         /* Simplified MLFQS 큐 레벨입니다. */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -126,16 +135,18 @@ const char *thread_name (void);
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);
 
+/* [추가] Project 1: 스케줄링 및 동기화 헬퍼 함수 선언 */
+
+/* 우선순위 비교 함수 (ready_list 및 synch 대기열 정렬에 사용) */
+bool thread_cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux);
+
+/* Priority Donation 헬퍼 함수 */
+void donate_priority (void);
+void remove_with_lock (struct lock *lock);
+void refresh_priority (void);
+
 /* Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func (struct thread *t, void *aux);
 void thread_foreach (thread_action_func *, void *);
-
-int thread_get_priority (void);
-void thread_set_priority (int);
-
-int thread_get_nice (void);
-void thread_set_nice (int);
-int thread_get_recent_cpu (void);
-int thread_get_load_avg (void);
 
 #endif /* threads/thread.h */
