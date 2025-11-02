@@ -36,7 +36,7 @@
 /* Fixed-Point와 정수 나눗셈 */
 #define FP_DIV_INT(x, n) ((x) / (n))
 
-/* States in a thread's life cycle. */
+/* Thread state definitions */
 enum thread_status
   {
     THREAD_RUNNING,     /* Running thread. */
@@ -53,11 +53,11 @@ struct thread
     enum thread_status status;          /* Thread state. */
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
-    int priority;                       /* Priority. */
+    int priority;                       /* Current Priority (Donated or MLFQS). */
     struct list_elem allelem;           /* List element for all threads list. */
     
     /* [Project 1: Priority Scheduling & Donation] */
-    int base_priority;                  /* 원래의 우선순위 (기부받기 전 값). */
+    int base_priority;                  /* 원래의 우선순위 (기부받기 전/MLFQS 계산 전 값). */
     struct lock *wait_on_lock;          /* 현재 기다리고 있는 Lock 포인터. */
     struct list_elem donation_elem;     /* 자신이 락의 donators 리스트에 사용될 리스트 엘리먼트. */
     struct list locks;                  /* 이 스레드가 획득한 Lock 리스트. */
@@ -69,7 +69,7 @@ struct thread
     int recent_cpu;                     /* 최근 CPU 사용량 (Fixed-Point). */
 
     /* Shared between thread.c and synch.c. */
-    struct list_elem elem;              /* List element. */
+    struct list_elem elem;              /* List element for ready list or waiters list. */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -84,16 +84,38 @@ struct thread
    If true, use multi-level feedback queue scheduler (MLFQS). */
 extern bool thread_mlfqs;
 
-/* Load average for MLFQS */
-extern int load_avg; // thread.c에서 전역으로 선언됨
+/* Load average for MLFQS (Fixed-Point). */
+extern int load_avg; 
 
-/*  (기존 함수 프로토타입)  */
+void thread_init (void);
+void thread_start (void);
+
+void thread_tick (void);
+void thread_print_stats (void);
+
+typedef int tid_t;
+typedef int (*thread_func) (void *aux);
+typedef void (*sema_action_func) (struct semaphore *sema, void *aux);
+tid_t thread_create (const char *name, int priority, thread_func func, void *aux);
+
+void thread_block (void);
+void thread_unblock (struct thread *t);
+
+struct thread *thread_current (void);
+tid_t thread_tid (void);
+const char *thread_name (void);
+
+void thread_exit (void) NO_RETURN;
+void thread_yield (void);
+
+/* Performs some operation on thread t, given auxiliary data AUX. */
+typedef void thread_action_func (struct thread *t, void *aux);
+void thread_foreach (thread_action_func *func, void *aux);
 
 int thread_get_priority (void);
 void thread_set_priority (int new_priority);
 void thread_update_priority (void); // Priority Donation 갱신 함수 선언
 
-/*  (MLFQS 관련 함수 프로토타입) */
 int thread_get_nice (void);
 void thread_set_nice (int nice);
 int thread_get_recent_cpu (void);
