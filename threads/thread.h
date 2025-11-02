@@ -73,13 +73,17 @@ struct thread
     struct list_elem elem;          /* List element. */
 
     /* [추가] Project 1: Priority Scheduling & Donation 관련 */
-    int original_priority;          /* Donation을 위해 원래 우선순위를 저장합니다. */
-    struct lock *wait_on_lock;      /* 현재 스레드가 획득을 기다리는 Lock의 포인터입니다. */
-    struct list_elem donation_elem; /* 락의 donators 리스트에 삽입될 리스트 요소입니다. */
+   int base_priority;           /* 원래의 우선순위 (기부받기 전 값). */
+    struct lock *wait_on_lock;   /* 현재 기다리고 있는 Lock 포인터. */
+    struct list_elem donation_elem;/* 자신이 락의 donators 리스트에 사용될 리스트 엘리먼트. */
+    struct list locks;           /* 이 스레드가 획득한 Lock 리스트. */
 
     /* [추가] Project 1: Aging 및 MLFQS 관련 */
     int age;                        /* 에이징을 위한 틱 카운터입니다. */
     int mlfqs_queue_level;          /* Simplified MLFQS 큐 레벨입니다 (0: Q0, 1: Q1, 2: Q2). */
+    int nice;                    /* MLFQS의 nice 값 (정수). */
+    int recent_cpu;              /* 최근 CPU 사용량 (Fixed-Point). */
+    
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
