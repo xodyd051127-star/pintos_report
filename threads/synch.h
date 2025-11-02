@@ -22,14 +22,15 @@ void sema_self_test (void);
 
 /* Lock. */
 struct lock
-{
-    struct thread *holder;         /* Thread holding lock (for debugging). */
-    struct semaphore semaphore;    /* Binary semaphore controlling access. */
+  {
+    struct thread *holder;      /* 락을 소유한 스레드 포인터 (디버깅용). */
+    struct semaphore semaphore;  /* 바이너리 세마포어. */
     
-    /* [추가] Project 1: Priority Donation 관련 */
-    struct list donators;          /* 이 Lock을 기다리는 스레드 리스트 (우선순위 순). */
-    int max_priority;              /* donators 리스트에서 가장 높은 우선순위입니다. */
-};
+    /* [Project 1: Priority Donation] */
+    struct list donators;        /* 이 Lock을 기다리는 스레드 리스트 (우선순위 순). */
+    int max_priority;            /* donators 리스트에서 가장 높은 우선순위. */
+    struct list_elem lock_elem;  /* 스레드의 locks 리스트에 사용될 엘리먼트. */
+  };
 
 void lock_init (struct lock *);
 void lock_acquire (struct lock *);
@@ -39,9 +40,9 @@ bool lock_held_by_current_thread (const struct lock *);
 
 /* Condition variable. */
 struct condition
-{
-    struct list waiters; /* List of waiting threads. */
-};
+  {
+    struct list waiters;        /* 조건 변수를 기다리는 스레드 리스트. */
+  };
 
 void cond_init (struct condition *);
 void cond_wait (struct condition *, struct lock *);
