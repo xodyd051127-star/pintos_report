@@ -216,6 +216,16 @@ thread_tick (void)
   else
     kernel_ticks++;
 
+   if (!thread_mlfqs) { 
+        // Ready List가 비어있지 않고, Ready List의 최상위 스레드 우선순위가
+        // 현재 스레드보다 높으면 선점 요청 (intr_yield_on_return)
+        if (!list_empty(&ready_list) && 
+            list_entry(list_front(&ready_list), struct thread, elem)->priority > t->priority) {
+            
+            intr_yield_on_return (); 
+        }
+    }
+
     // [수정] 스케줄링 로직을 MLFQS 모드와 Priority/Aging 모드로 명확히 분리
     if (thread_mlfqs) {
         /* Simplified MLFQS Logic */
